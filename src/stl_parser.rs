@@ -1,6 +1,6 @@
-use anyhow::{Result, anyhow, Context};
+use anyhow::{anyhow, Context, Result};
 use glam::Vec3;
-use std::io::{Read, Cursor};
+use std::io::{Cursor, Read};
 use std::path::Path;
 
 use crate::cad_data::{CadModel, Triangle};
@@ -13,10 +13,12 @@ impl StlParser {
     }
 
     pub async fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<CadModel> {
-        let data = tokio::fs::read(&path).await
+        let data = tokio::fs::read(&path)
+            .await
             .with_context(|| format!("Failed to read file: {}", path.as_ref().display()))?;
-        
-        let file_name = path.as_ref()
+
+        let file_name = path
+            .as_ref()
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
@@ -31,8 +33,8 @@ impl StlParser {
         }
 
         // Check if it's ASCII STL by looking for "solid" at the beginning
-        let is_ascii = data.starts_with(b"solid") && 
-            data.iter().take(1024).all(|&b| b.is_ascii() && b != 0);
+        let is_ascii =
+            data.starts_with(b"solid") && data.iter().take(1024).all(|&b| b.is_ascii() && b != 0);
 
         let triangles = if is_ascii {
             self.parse_ascii_stl(data)?
@@ -44,7 +46,7 @@ impl StlParser {
 
         let mut model = CadModel::new(name, triangles);
         model.precision_info.file_size_bytes = data.len();
-        
+
         Ok(model)
     }
 
@@ -67,7 +69,7 @@ impl StlParser {
 
             if line.starts_with("facet normal") {
                 let normal = self.parse_normal_line(line)?;
-                
+
                 // Skip "outer loop"
                 if let Some(loop_line) = lines.next() {
                     if !loop_line.starts_with("outer loop") {
@@ -102,19 +104,19 @@ impl StlParser {
         }
 
         let mut cursor = Cursor::new(data);
-        
+
         // Skip 80-byte header
         cursor.set_position(80);
-        
+
         // Read triangle count
         let triangle_count = self.read_u32_le(&mut cursor)?;
-        
+
         if data.len() < 84 + (triangle_count as usize * 50) {
             return Err(anyhow!("Binary STL data truncated"));
         }
 
         let mut triangles = Vec::with_capacity(triangle_count as usize);
-        
+
         for _ in 0..triangle_count {
             // Read normal
             let normal = Vec3::new(
@@ -199,11 +201,11 @@ endsolid test";
 
         let parser = StlParser::new();
         let model = parser.parse_data(stl_data, "test.stl".to_string()).unwrap();
-        
+
         assert_eq!(model.triangles.len(), 1);
         assert_eq!(model.triangles[0].vertices[0], Vec3::new(0.0, 0.0, 0.0));
         assert_eq!(model.triangles[0].vertices[1], Vec3::new(1.0, 0.0, 0.0));
         assert_eq!(model.triangles[0].vertices[2], Vec3::new(0.0, 1.0, 0.0));
         assert_eq!(model.triangles[0].normal, Vec3::new(0.0, 0.0, 1.0));
     }
-} 
+}

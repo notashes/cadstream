@@ -79,4 +79,4 @@ impl CadModel {
         let size = self.size();
         size.x.max(size.y).max(size.z)
     }
-} 
+}

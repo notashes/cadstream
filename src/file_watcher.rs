@@ -1,9 +1,12 @@
 use anyhow::Result;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind, event::CreateKind, event::ModifyKind};
+use notify::{
+    event::CreateKind, event::ModifyKind, Event, EventKind, RecommendedWatcher, RecursiveMode,
+    Watcher,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
 use std::time::Duration;
+use tokio::sync::{mpsc, RwLock};
 
 use crate::{cad_data::CadModel, stl_parser::StlParser};
 
@@ -20,7 +23,7 @@ impl FileWatcher {
         // Start file processing task
         tokio::spawn(async move {
             let parser = StlParser::new();
-            
+
             while let Some(path) = rx.recv().await {
                 if let Err(e) = Self::process_file(&parser, &path, &current_model_clone).await {
                     eprintln!("❌ Failed to process file {}: {}", path.display(), e);
@@ -28,8 +31,8 @@ impl FileWatcher {
             }
         });
 
-        let watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-            match res {
+        let watcher =
+            notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
                 Ok(event) => {
                     let should_process = match event.kind {
                         EventKind::Create(CreateKind::File) => true,
@@ -49,8 +52,7 @@ impl FileWatcher {
                     }
                 }
                 Err(e) => eprintln!("File watcher error: {:?}", e),
-            }
-        })?;
+            })?;
 
         let mut file_watcher = Self {
             _watcher: watcher,
@@ -58,26 +60,31 @@ impl FileWatcher {
         };
 
         file_watcher.start_watching().await?;
-        
+
         Ok(file_watcher)
     }
 
     async fn start_watching(&mut self) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         println!("👀 Watching directory: {}", current_dir.display());
-        
-        self._watcher.watch(&current_dir, RecursiveMode::NonRecursive)?;
+
+        self._watcher
+            .watch(&current_dir, RecursiveMode::NonRecursive)?;
 
         // Check for existing STL files in the directory
         let parser = StlParser::new();
         let mut entries = tokio::fs::read_dir(&current_dir).await?;
-        
+
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if Self::is_stl_file(&path) {
                 println!("📄 Found existing STL file: {}", path.display());
                 if let Err(e) = Self::process_file(&parser, &path, &self.current_model).await {
-                    eprintln!("❌ Failed to process existing file {}: {}", path.display(), e);
+                    eprintln!(
+                        "❌ Failed to process existing file {}: {}",
+                        path.display(),
+                        e
+                    );
                 } else {
                     // Only load the first file found for now
                     break;
@@ -95,18 +102,25 @@ impl FileWatcher {
     ) -> Result<()> {
         // Add a small delay to ensure file is fully written
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         let model = parser.parse_file(path).await?;
-        
+
         println!("✅ Successfully loaded: {}", model.name);
         println!("   📊 {} triangles", model.precision_info.triangle_count);
-        println!("   📏 Size: {:.2} x {:.2} x {:.2}", 
-                 model.size().x, model.size().y, model.size().z);
-        println!("   💾 File size: {} bytes", model.precision_info.file_size_bytes);
-        
+        println!(
+            "   📏 Size: {:.2} x {:.2} x {:.2}",
+            model.size().x,
+            model.size().y,
+            model.size().z
+        );
+        println!(
+            "   💾 File size: {} bytes",
+            model.precision_info.file_size_bytes
+        );
+
         let mut current = current_model.write().await;
         *current = Some(model);
-        
+
         Ok(())
     }
 
@@ -153,6 +167,6 @@ endsolid test_cube"#;
 
     tokio::fs::write("test_cube.stl", test_stl).await?;
     println!("📝 Created test_cube.stl - a simple cube for demonstration");
-    
+
     Ok(())
-} 
+}

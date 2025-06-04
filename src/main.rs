@@ -1,17 +1,13 @@
 mod cad_data;
+mod file_watcher;
 mod rerun_renderer;
 mod stl_parser;
-mod file_watcher;
 
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{
-    cad_data::CadModel,
-    rerun_renderer::RerunRenderer,
-    file_watcher::FileWatcher,
-};
+use crate::{cad_data::CadModel, file_watcher::FileWatcher, rerun_renderer::RerunRenderer};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -27,7 +23,7 @@ async fn main() -> Result<()> {
             break;
         }
     }
-    
+
     if !has_stl_files {
         if let Err(e) = file_watcher::create_test_stl_file().await {
             eprintln!("Failed to create test STL file: {}", e);
@@ -46,15 +42,15 @@ async fn run_rerun_mode(current_model: Arc<RwLock<Option<CadModel>>>) -> Result<
     println!("🌐 Starting CAD Stream Processor with Rerun visualization");
     println!("----------------------------------------------------------");
     println!("🚀 Rerun gRPC server is starting...");
-    
+
     let rerun_renderer = RerunRenderer::new(current_model)?;
-    
+
     println!("✅ Rerun server is running on port 9876");
     println!("📱 To view the data:");
     println!("   1. Install Rerun viewer: pip install rerun-sdk");
     println!("   2. Connect with: rerun --connect 127.0.0.1:9876");
     println!("   3. Or open Rerun app and connect to: 127.0.0.1:9876");
     println!("----------------------------------------------------------");
-    
+
     rerun_renderer.run().await
 }
