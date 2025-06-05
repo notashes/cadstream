@@ -41,8 +41,32 @@ cd cadstream
 # Install Rerun viewer
 pip install rerun-sdk
 
-# Start the CAD stream processor
+# Start the CAD stream processor with default parser
 cargo run
+
+# Or use specific STL parser implementation
+cargo run --features stl-io-parser --no-default-features
+cargo run --features custom-stl-parser --no-default-features
+```
+
+### 🔧 **Parser Selection**
+
+This project supports multiple STL parsing implementations:
+
+- **`custom-stl-parser`** (default) - Our own high-performance STL parser
+- **`stl-io-parser`** - Using the established `stl_io` crate
+
+Choose your parser with feature flags:
+
+```bash
+# Use our custom parser (default)
+cargo run
+
+# Use stl_io crate
+cargo run --features stl-io-parser --no-default-features
+
+# Build with specific parser
+cargo build --features stl-io-parser --no-default-features
 ```
 
 ### 🚀 **Connection Process**
@@ -113,17 +137,32 @@ cargo test
 cargo run
 # Drop STL files into the directory to test parsing
 
-# Run benchmarks
+# Run benchmarks (test both parsers)
 cargo bench
+cargo bench --features stl-io-parser --no-default-features
 ```
 
 ## 📊 Performance Metrics
 
 Current performance characteristics:
-- **Parsing**: ~10MB/s for ASCII STL, ~50MB/s for binary STL
+- **Parsing**: ~10MB/s for ASCII STL, ~50MB/s for binary STL (custom parser)
+- **Parsing**: Performance varies with `stl_io` parser (benchmarks available)
 - **Streaming**: Real-time gRPC transmission to Rerun
 - **Memory**: ~2x file size peak memory usage
 - **Startup**: <100ms from launch to data streaming
+
+### 🏗️ **Parser Architecture**
+
+**Extensible Design for Multiple CAD Formats:**
+- **`FileParser` trait**: Common interface for all CAD format parsers
+- **`ParserFactory`**: Automatically selects parser based on file format and enabled features
+- **Format detection**: Automatic file format identification by extension
+- **Feature flags**: Choose parser implementation at compile time
+- **Future-ready**: Designed to easily add new formats (OBJ, PLY, STEP, etc.)
+
+**Current STL Parser Options:**
+- **`custom-stl-parser`** (default): Our own optimized implementation
+- **`stl-io-parser`**: Using the established `stl_io` crate
 
 ## 🚧 Development Roadmap
 
@@ -172,8 +211,20 @@ This project is open source and available under the MIT License.
 
 ## 💡 Tips
 
+### Performance & Usage
 - For best performance, use binary STL files when possible
-- The parser handles malformed files gracefully with detailed error messages
+- Both parsers handle malformed files gracefully with detailed error messages
 - Use `RUST_LOG=debug cargo run` for detailed parsing information
 - Rerun viewer provides timeline navigation for file changes
-- Connect multiple viewers to the same server for collaborative viewing 
+- Connect multiple viewers to the same server for collaborative viewing
+
+### Parser Selection
+- **Custom parser**: Generally faster, more control, demonstrates parsing skills
+- **stl_io parser**: Battle-tested, fewer edge cases, external dependency
+- Compare performance: `cargo bench` vs `cargo bench --features stl-io-parser --no-default-features`
+- The console output shows which parser is being used: `(using Custom STL Parser)` or `(using stl_io Parser)`
+
+### Future Development
+- Adding new formats is as simple as implementing the `FileParser` trait
+- Feature flags allow users to choose only the parsers they need
+- The architecture supports mixed format workflows (future: STL + OBJ + PLY) 

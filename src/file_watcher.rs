@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 
-use crate::{cad_data::CadModel, stl_parser::StlParser};
+use crate::cad_data::CadModel;
+use crate::parsers::{parse_file, FileFormat, ParserFactory};
 
 pub struct FileWatcher {
     _watcher: RecommendedWatcher,
@@ -22,10 +23,8 @@ impl FileWatcher {
 
         // Start file processing task
         tokio::spawn(async move {
-            let parser = StlParser::new();
-
             while let Some(path) = rx.recv().await {
-                if let Err(e) = Self::process_file(&parser, &path, &current_model_clone).await {
+                if let Err(e) = Self::process_file(&path, &current_model_clone).await {
                     eprintln!("❌ Failed to process file {}: {}", path.display(), e);
                 }
             }
@@ -42,8 +41,8 @@ impl FileWatcher {
 
                     if should_process {
                         for path in event.paths {
-                            if Self::is_stl_file(&path) {
-                                println!("📁 Detected STL file: {}", path.display());
+                            if Self::is_supported_file(&path) {
+                                println!("📁 Detected CAD file: {}", path.display());
                                 if let Err(e) = tx.try_send(path.to_path_buf()) {
                                     eprintln!("Failed to queue file for processing: {}", e);
                                 }
@@ -71,15 +70,14 @@ impl FileWatcher {
         self._watcher
             .watch(&current_dir, RecursiveMode::NonRecursive)?;
 
-        // Check for existing STL files in the directory
-        let parser = StlParser::new();
+        // Check for existing CAD files in the directory
         let mut entries = tokio::fs::read_dir(&current_dir).await?;
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if Self::is_stl_file(&path) {
-                println!("📄 Found existing STL file: {}", path.display());
-                if let Err(e) = Self::process_file(&parser, &path, &self.current_model).await {
+            if Self::is_supported_file(&path) {
+                println!("📄 Found existing CAD file: {}", path.display());
+                if let Err(e) = Self::process_file(&path, &self.current_model).await {
                     eprintln!(
                         "❌ Failed to process existing file {}: {}",
                         path.display(),
@@ -96,16 +94,26 @@ impl FileWatcher {
     }
 
     async fn process_file(
-        parser: &StlParser,
         path: &Path,
         current_model: &Arc<RwLock<Option<CadModel>>>,
     ) -> Result<()> {
         // Add a small delay to ensure file is fully written
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let model = parser.parse_file(path).await?;
+        // Detect file format and create appropriate parser
+        let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
 
-        println!("✅ Successfully loaded: {}", model.name);
+        let format = FileFormat::from_extension(extension)
+            .ok_or_else(|| anyhow::anyhow!("Unsupported file format: {}", extension))?;
+
+        let parser = ParserFactory::create_parser(format)?;
+        let model = parse_file(parser.as_ref(), path).await?;
+
+        println!(
+            "✅ Successfully loaded: {} (using {})",
+            model.name,
+            parser.parser_name()
+        );
         println!("   📊 {} triangles", model.precision_info.triangle_count);
         println!(
             "   📏 Size: {:.2} x {:.2} x {:.2}",
@@ -124,11 +132,13 @@ impl FileWatcher {
         Ok(())
     }
 
-    fn is_stl_file(path: &Path) -> bool {
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.to_lowercase() == "stl")
-            .unwrap_or(false)
+    fn is_supported_file(path: &Path) -> bool {
+        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+            let supported_extensions = ParserFactory::supported_extensions();
+            supported_extensions.contains(&extension.to_lowercase().as_str())
+        } else {
+            false
+        }
     }
 }
 
