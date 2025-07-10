@@ -1,5 +1,6 @@
 mod cad_data;
 mod file_watcher;
+mod parsers;
 mod rerun_renderer;
 mod stl_parser;
 

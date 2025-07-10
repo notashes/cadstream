@@ -3,6 +3,11 @@ name = "cadstream"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["custom-stl-parser"]
+custom-stl-parser = []
+stl-io-parser = ["dep:stl_io"]
+
 [dependencies]
 # Math and data handling
 glam = "0.27"
@@ -18,6 +23,9 @@ env_logger = "0.11"
 
 # Rerun integration for visualization
 rerun = { version = "0.23.4", features = ["web_viewer"] }
+
+# STL parsing (optional)
+stl_io = { version = "0.7", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
